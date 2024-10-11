@@ -50,7 +50,7 @@ def get_promo(promo_id: str):
         session.add(promo)
         session.commit()
 
-        file_path = os.path.join(PROMOS_FOLDER, f"{promo_id}.png")
+        file_path = os.path.join(PROMOS_FOLDER, f"{promo_id}.webp")
         if not os.path.exists(file_path):
             raise HTTPException(status_code=404, detail="Image not found")
         
