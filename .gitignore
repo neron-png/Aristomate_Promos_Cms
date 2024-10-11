@@ -1,0 +1,4 @@
+Pipfile.lock
+__pycache__/
+promos.db
+test.db

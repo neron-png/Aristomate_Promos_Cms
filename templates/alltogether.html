@@ -1,0 +1,64 @@
+<html>
+<head>
+    <title>Item Details</title>
+    <script>
+        let data = fetch('http://localhost:8000/promos')
+            .then(response => response.json())
+            .then(data => {
+                console.log(data);
+                return data;
+            });
+            data.forEach(promo => {
+                const promo_id = promo.promo_id;
+                fetch(`http://localhost:8000/promo/image/${promo_id}`)
+                    .then(response => response.blob())
+                    .then(blob => {
+                        const url = URL.createObjectURL(blob);
+                        const img = document.createElement('img');
+                        img.src = url;
+                        document.body.appendChild(img);
+                    });
+            });
+    </script>
+</head>
+<body>
+    <h1>Adverts</h1>
+    <ul id="promosList">
+    </ul>
+    <script>
+        data.then(promos => {
+            let promosList = document.getElementById('promosList');
+            promos.forEach(promo => {
+                const innerHTML = `
+                    <li>
+                        <h2>${promo.title}</h2>
+                        <p>${promo.description}</p>
+                        <img src="http://localhost:8000/promo/image/${promo.promo_id}" />
+                    </li>
+                `;
+                promosList.innerHTML += innerHTML;
+            });
+        });
+    </script>
+</body>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+    }
+    h1 {
+        text-align: center;
+    }
+    ul {
+        list-style-type: none;
+        padding: 0;
+    }
+    li {
+        border: 1px solid #ccc;
+        margin: 10px;
+        padding: 10px;
+    }
+    img {
+        width: 100%;
+    }
+</style>
+</html>
