@@ -1,6 +1,7 @@
+from datetime import datetime
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
-from sqlmodel import SQLModel, create_engine, Session, select, Field, JSON
+from sqlmodel import SQLModel, create_engine, Session, select, Field, JSON, DATETIME, DateTime
 import os
 import json
 from fastapi.encoders import jsonable_encoder
@@ -27,10 +28,59 @@ class PromoCampaign(SQLModel, table=True):
     description: str = Field(default="")
     link: str = Field(default="")
 
+class PromoActive(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    promo_id: str = Field(index=True, unique=True, foreign_key="promocampaign.promo_id")
+    active: bool = Field(default=True)
+    start_date: str = Field(default="")
+    end_date: str = Field(default="")
+
 
 SQLModel.metadata.create_all(engine)
 
 PROMOS_FOLDER = os.path.join(os.path.dirname(__file__), "promos")
+
+
+def incremate_query_count(promo_id):
+    with Session(engine) as session:
+        statement = select(Promo).where(Promo.promo_id == promo_id)
+        promo = session.exec(statement).first()
+        if not promo:
+            promo = Promo(promo_id=promo_id)
+        promo.query_count += 1
+        session.add(promo)
+        session.commit()
+
+
+def increment_click_count(promo_id):
+    with Session(engine) as session:
+        statement = select(Promo).where(Promo.promo_id == promo_id)
+        promo = session.exec(statement).first()
+        if not promo:
+            promo = Promo(promo_id=promo_id)
+        promo.click_count += 1
+        session.add(promo)
+        session.commit()
+
+
+def checkActive(promo_id):
+    # Check if the promo is active and if it is within the start and end date.
+    # Also if the promo is active and no start and end date is provided, it is considered active.
+    # And also create it if it does not exist.
+    with Session(engine) as session:
+        statement = select(PromoActive).where(PromoActive.promo_id == promo_id)
+        promo = session.exec(statement).first()
+        if not promo:
+            promo = PromoActive(promo_id=promo_id, active=True)
+            session.add(promo)
+            session.commit()
+        if promo.active:
+            current_date = datetime.now()
+            start_date = datetime.strptime(promo.start_date, "%Y-%m-%d") if promo.start_date else None
+            end_date = datetime.strptime(promo.end_date, "%Y-%m-%d") if promo.end_date else None
+            if (not start_date and not end_date) or start_date <= current_date <= end_date:
+                return True
+        return False
 
 @app.get("/promo/image/{promo_id}")
 def get_promo(promo_id: str):
@@ -41,14 +91,7 @@ def get_promo(promo_id: str):
         if not campaign:
             raise HTTPException(status_code=404, detail="Promo not found")
         
-        statement = select(Promo).where(Promo.promo_id == promo_id)
-        promo = session.exec(statement).first()
-        if not promo:
-            promo = Promo(promo_id=promo_id, link=campaign.link)
-        
-        promo.query_count += 1
-        session.add(promo)
-        session.commit()
+        incremate_query_count(promo_id)
 
         file_path = os.path.join(PROMOS_FOLDER, f"{promo_id}.webp")
         if not os.path.exists(file_path):
@@ -65,13 +108,7 @@ def get_promo_link(promo_id: str):
         if not campaign:
             raise HTTPException(status_code=404, detail="Promo not found")
         
-        statement = select(Promo).where(Promo.promo_id == promo_id)
-        promo = session.exec(statement).first()
-        if not promo:
-            promo = Promo(promo_id=promo_id, link=campaign.link)
-        promo.click_count += 1
-        session.add(promo)
-        session.commit()
+        increment_click_count(promo_id)
         
         return RedirectResponse(url=campaign.link)
 
@@ -83,6 +120,8 @@ def get_promos():
         # Changing the filters from JSON string to JSON object
         parsed_campaigns = []
         for campaign in campaigns:
+            if not checkActive(campaign.promo_id):
+                continue
             parsed_campaigns.append(jsonable_encoder(campaign))
             content = {
                 "title": campaign.title,
